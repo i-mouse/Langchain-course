@@ -18,6 +18,7 @@ def main():
     "His dedication, humility, and passion for the game inspired millions. Beyond statistics, Sachin became a symbol of " \
     "excellence and perseverance, earning respect both on and off the field."""
 
+    # here information is not a variable, its just a placeholder
     template = "Given the information {information}, I want you to create 1. Short summry 2.two bad points"
 
     prompt = PromptTemplate(input_variables=["information"], template=template)
@@ -28,7 +29,7 @@ def main():
     chain = prompt | llm
 
     response = chain.invoke({"information" : information})
-    print(response)
+    print(response.content)
 
 if __name__ == "__main__":
     main()
