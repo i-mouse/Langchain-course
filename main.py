@@ -2,10 +2,12 @@ import json
 import os
 
 from dotenv import load_dotenv
-from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
+from langchain_classic.agents import AgentExecutor
 from langchain_classic.agents.react.agent import create_react_agent
 from langchain_classic.output_parsers.pydantic import PydanticOutputParser
 from langchain_classic.prompts import PromptTemplate
+from langchain_core.runnables import RunnableLambda
+
 
 # External LangChain integrations
 from langchain_ollama import ChatOllama
@@ -24,6 +26,7 @@ llm = ChatOllama(model="llama3.1:8b", temperature=0)
 
 # --- Define custom Pydantic output parser ---
 new_output_parser = PydanticOutputParser(pydantic_object=AgentResponse)
+structured_output = llm.with_structured_output(AgentResponse)
 
 # --- Define ReAct prompt with correct input variables ---
 react_prompt = PromptTemplate(
@@ -39,7 +42,9 @@ agent = create_react_agent(llm=llm, tools=tools, prompt=react_prompt)
 agent_executor = AgentExecutor(
     agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
 )
-chain = agent_executor
+extract_output = RunnableLambda(lambda x:x["output"])
+parse_output = RunnableLambda(lambda x :new_output_parser(x) )
+chain = agent_executor | extract_output | parse_output
 
 
 def main():
