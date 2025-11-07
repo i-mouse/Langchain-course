@@ -17,11 +17,13 @@ import json
 import os
 
 from dotenv import load_dotenv
-from langchain_classic.agents import AgentExecutor
-from langchain_classic.agents.react.agent import create_react_agent
-from langchain_classic.output_parsers.pydantic import PydanticOutputParser
-from langchain_classic.prompts import PromptTemplate
+# from langchain_classic.agents import AgentExecutor
+# from langchain_classic.agents.react.agent import create_react_agent
+# from langchain_classic.output_parsers.pydantic import PydanticOutputParser
+# from langchain_classic.prompts import PromptTemplate
 from langchain_core.runnables import RunnableLambda
+from langchain.agents import create_agent
+from langchain.tools import tool
 
 # External LangChain integrations
 from langchain_ollama import ChatOllama
@@ -36,64 +38,46 @@ load_dotenv()
 
 # --- Define tools and LLM ---
 tools = [TavilySearch()]
-llm = ChatOllama(model="llama3.1:8b", temperature=0)
 
-# --- Define custom Pydantic output parser ---
-new_output_parser = PydanticOutputParser(pydantic_object=AgentResponse)
+@tool("smart_search", return_direct=False)
+def smart_search(query: str) -> str:
+    """
+    A smarter fake search tool for testing agents.
+    Returns realistic search-like JSON for the query.
+    """
+    results = [
+        {
+            "title": f"{query} – Official LangChain Blog",
+            "url": "https://blog.langchain.com/langchain-0-2-0-release"
+        },
+        {
+            "title": f"{query} – Medium Tutorial",
+            "url": "https://medium.com/@langchain/intro-tutorial",
+        },
+        {
+            "title": f"{query} – Towards Data Science Guide",
+            "url": "https://towardsdatascience.com/langchain-getting-started"
+        }
+    ]
 
+    # Return structured, clean data
+    return {"query": query, "results": results}
 
-# --- Define manual chain ReAct prompt  ---
-react_prompt = PromptTemplate(
-    template=REACT_FORMAT_INSTRUCTION,
-    input_variables=["input", "agent_scratchpad", "tool_names", "tools"],
-    partial_variables={
-        "format_instructions": new_output_parser.get_format_instructions()
-    },
-)
-agent = create_react_agent(llm=llm, tools=tools, prompt=react_prompt)
-agent_executor = AgentExecutor(
-    agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
-)
+Simpletools = [smart_search]
 
-# --- Define structured chain ReAct prompt  ---
-structured_output = llm.with_structured_output(AgentResponse)
-structed_react_prompt = PromptTemplate(
-    template=REACT_FORMAT_INSTRUCTION,
-    input_variables=["input", "agent_scratchpad", "tool_names", "tools"],
-    partial_variables={"format_instructions": ""},
-)
-structed_agent = create_react_agent(llm=llm, tools=tools, prompt=structed_react_prompt)
-structed_agent_executor = AgentExecutor(
-    agent=structed_agent, tools=tools, verbose=True, handle_parsing_errors=True
-)
+llm = ChatOllama(model="gpt-oss:20b", temperature=0 ,format="json")
+extract_structured = RunnableLambda(lambda x: x.get("structured_response"))
 
-
-extract_output = RunnableLambda(lambda x: x["output"])
-parse_output = RunnableLambda(lambda x: new_output_parser.parse(x))
-
-# chain = agent_executor | extract_output | parse_output
-structed_chain = structed_agent_executor | extract_output | structured_output
-
-
+#------- using newest approach v1.0 create_agent()-------------------
+agent = create_agent(model= llm , tools=Simpletools, response_format=AgentResponse)
+chain = agent | extract_structured
 def main():
     print("\n🚀 Hello from langchain-course!\n")
     query = "Find the 3 most recent tutorials or blogs about learning LangChain published this month."
-    #result = chain.invoke({"input": query})
-    structured_result = structed_chain.invoke({"input": query})
-    # print(f"\n\nresult :{result} ")
-    # print("\n\n=== Agent Response ===")
-    # print(f"Answer: {'dummy'}\n")
-    # print("Sources:")
-    # for i, src in enumerate(result.sources, 1):
-    #     print(f"  {i}. {src.url}")
-    # print("======================\n")
+  
 
-    print("\n\n===Structured Agent Response ===")
-    print(f"Answer: {structured_result.answer}\n")
-    print("Sources:") 
-    for i, src in enumerate(structured_result.sources, 1):
-        print(f"  {i}. {src.url}")
-    print("======================\n")
+    result = chain.invoke({"messages": [{"role": "user", "content":query}]})
+    print(f"\n\nresult :{result} ")
 
 
 if __name__ == "__main__":
